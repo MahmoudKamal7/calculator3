@@ -64,10 +64,19 @@
             box-sizing: border-box;
             font-size: 1em;
             transition: border-color 0.3s;
+            /* توحيد الأرقام في حقول الإدخال */
+            font-family: 'Tahoma', Arial, sans-serif; 
+            direction: rtl; /* لضمان محاذاة النص لليمين لكن الأرقام تعرض بالنمط الهندي */
         }
         input[type="number"]:focus {
             border-color: #007bff;
             outline: none;
+        }
+        /* إزالة سهم الزيادة/النقصان */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none;
+            margin: 0;
         }
         .result-box {
             margin-top: 30px;
@@ -126,7 +135,7 @@
 <div class="container">
 
     <div class="header">
-        <img src="logo.jpg" alt="شعار وقف العائلة" class="logo">
+        <img src="https://i.postimg.cc/PrkTFVC3/logo.jpg" alt="شعار وقف العائلة" class="logo">
         <h1>وقف المقحميات</h1>
         
         <h1>حاسبة قروض الوقف</h1>
@@ -187,12 +196,11 @@
 
 <script>
     // القيم الثابتة المطلوبة للحساب
-    const TOTAL_FUNDS = 90000; // إجمالي المبلغ المتوفر حاليًا (٩٠ ألف ريال)
-    const EMERGENCY_RESERVE_PERCENT = 0.10; // ١٠٪ للقروض الطارئة
-    const AVAILABLE_FUNDS_FOR_LOAN = TOTAL_FUNDS * (1 - EMERGENCY_RESERVE_PERCENT); // ٨١,٠٠٠ ريال
+    const TOTAL_FUNDS = 90000; 
+    const EMERGENCY_RESERVE_PERCENT = 0.10; 
+    const AVAILABLE_FUNDS_FOR_LOAN = TOTAL_FUNDS * (1 - EMERGENCY_RESERVE_PERCENT); 
 
     // جدول فئات الأقساط (مبني على الملف المرفق)
-    // القيمة هي الحد الأدنى للقسط الشهري
     const INSTALLMENT_TIERS = [
         { max: 5000, installment: 500 },
         { max: 10000, installment: 1000 },
@@ -201,84 +209,91 @@
         { max: 35000, installment: 2500 },
         { max: 40000, installment: 3000 },
         { max: 45000, installment: 3500 },
-        { max: 50000, installment: 4000 } // سقف القرض الأقصى المحدد بالجدول هو ٥٠ ألف ريال
+        { max: 50000, installment: 4000 } 
     ];
 
+    /**
+     * دالة التحويل من الأرقام الغربية (0-9) إلى الأرقام العربية/الهندية (٠-٩).
+     */
+    function convertToEasternArabic(number) {
+        if (typeof number === 'number') {
+            number = String(number);
+        }
+        const western = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        const eastern = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+        
+        return number.replace(/[0-9]/g, function (digit) {
+            return eastern[western.indexOf(digit)];
+        });
+    }
+
+    /**
+     * دالة مساعدة لتنسيق العملة باستخدام التحويل اليدوي.
+     */
+    function formatCurrency(amount) {
+        // نستخدم toLocaleString للحصول على الفواصل الألفية بالنمط العربي
+        let formatted = amount.toLocaleString('ar-SA', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        
+        // ثم نحول الأرقام نفسها إلى النمط الهندي
+        return formatted.replace(/[0-9]/g, convertToEasternArabic);
+    }
+    
     function calculateLoan() {
-        // 1. استخلاص المدخلات
         const myContribution = parseFloat(document.getElementById('contribution').value) || 0;
         const parentsContribution = parseFloat(document.getElementById('parents-contribution').value) || 0;
         const deposits = parseFloat(document.getElementById('additional-deposits').value) || 0;
         
-        // حساب الرصيد الإجمالي المساهم به
         const totalContribution = myContribution + parentsContribution + deposits;
         document.getElementById('total-contribution').textContent = formatCurrency(totalContribution);
 
-        // 2. حساب القيود الثلاثة لسقف القرض
         let maxLoanCeiling = Infinity;
         let limitationReason = "";
 
-        // أ) القيد الشخصي (٥ أضعاف الرصيد المساهم به)
+        // القيود
         const ceiling_A = 5 * totalContribution;
+        const ceiling_B = AVAILABLE_FUNDS_FOR_LOAN / 5; 
+        const minimumReserve = AVAILABLE_FUNDS_FOR_LOAN * EMERGENCY_RESERVE_PERCENT; 
+        const ceiling_C = AVAILABLE_FUNDS_FOR_LOAN - minimumReserve; 
 
-        // ب) القيد المطلق (خُمس الرصيد الفعلي المخصص للإقراض) - 1/5 من 81,000 ريال
-        const ceiling_B = AVAILABLE_FUNDS_FOR_LOAN / 5; // 81,000 / 5 = 16,200 ريال
+        maxLoanCeiling = Math.min(ceiling_A, ceiling_B, ceiling_C, 50000); 
 
-        // ج) قيد السيولة المتبقية (يجب أن يتبقى 10% من إجمالي المبلغ المخصص للإقراض (81,000))
-        // المبلغ الذي يمكن إقراضه هو: الرصيد المتاح - (10% من الرصيد المتاح)
-        const minimumReserve = AVAILABLE_FUNDS_FOR_LOAN * EMERGENCY_RESERVE_PERCENT; // 8,100 ريال
-        const ceiling_C = AVAILABLE_FUNDS_FOR_LOAN - minimumReserve; // 72,900 ريال (هذا غالباً لن يكون القيد الفعلي لأنه كبير جداً)
-
-        // 3. تحديد سقف القرض النهائي (أقل قيمة من القيود)
-        maxLoanCeiling = Math.min(ceiling_A, ceiling_B, ceiling_C, 50000); // 50,000 ريال كسقف مطلق حسب الجدول
-
-        // تحديد سبب التقييد الأقل (تعديل النص بناءً على طلب العميل)
         if (maxLoanCeiling > 0) {
             limitationReason = "وفقاً للائحة تنظيم الإقراض للوقف.";
         } else {
             limitationReason = "الرصيد المساهم به لا يسمح بأي قرض حاليًا.";
         }
 
-        // 4. عرض سقف القرض
         document.getElementById('loan-ceiling-amount').textContent = formatCurrency(maxLoanCeiling);
         
         const limitationNoteElement = document.getElementById('limitation-note');
         if (maxLoanCeiling > 0) {
             limitationNoteElement.textContent = limitationReason;
             limitationNoteElement.style.display = 'block';
-            document.getElementById('loan-ceiling-amount').style.color = '#155724'; // أخضر بعد الحساب
+            document.getElementById('loan-ceiling-amount').style.color = '#155724'; 
         } else {
-            limitationNoteElement.textContent = limitationReason; // "الرصيد المساهم به لا يسمح بأي قرض حاليًا."
+            limitationNoteElement.textContent = limitationReason; 
             limitationNoteElement.style.display = 'block';
-            document.getElementById('loan-ceiling-amount').style.color = '#d9534f'; // أحمر
+            document.getElementById('loan-ceiling-amount').style.color = '#d9534f'; 
         }
 
-
-        // 5. تحديد القسط الشهري وعدد الأقساط
         let monthlyInstallment = 0;
         let numInstallments = 0;
 
         if (maxLoanCeiling > 0) {
-            // البحث عن القسط المناسب من الجدول
-            // يجب أن يكون maxLoanCeiling <= t.max لأول قيمة في الجدول
             const tier = INSTALLMENT_TIERS.find(t => maxLoanCeiling <= t.max);
             
             if (tier) {
                 monthlyInstallment = tier.installment;
-                // حساب عدد الأقساط (تقريبًا للأعلى لضمان السداد الكامل)
                 numInstallments = Math.ceil(maxLoanCeiling / monthlyInstallment);
             } else if (maxLoanCeiling > INSTALLMENT_TIERS[INSTALLMENT_TIERS.length - 1].max) {
-                 // إذا تجاوز سقف الـ 50000 ريال (وهو ما لا يجب أن يحدث بسبب القيود)
-                 // سنفترض أنه يأخذ نفس قسط آخر فئة في الجدول إذا حدث تجاوز (حالة نادرة)
-                 monthlyInstallment = INSTALLMENT_TIERS[INSTALLMENT_TIERS.length - 1].installment;
-                 numInstallments = Math.ceil(maxLoanCeiling / monthlyInstallment);
+                monthlyInstallment = INSTALLMENT_TIERS[INSTALLMENT_TIERS.length - 1].installment;
+                numInstallments = Math.ceil(maxLoanCeiling / monthlyInstallment);
             }
         }
         
         document.getElementById('monthly-installment').textContent = formatCurrency(monthlyInstallment);
-        document.getElementById('num-installments').textContent = numInstallments;
+        document.getElementById('num-installments').textContent = convertToEasternArabic(numInstallments);
 
-        // 6. عرض تواريخ الأقساط
         displayInstallmentDates(numInstallments);
     }
 
@@ -287,48 +302,42 @@
      */
     function displayInstallmentDates(count) {
         const tableBody = document.querySelector('#installment-table tbody');
-        tableBody.innerHTML = ''; // تفريغ الجدول القديم
+        tableBody.innerHTML = ''; 
 
-        if (count === 0 || isNaN(count)) { // إضافة isNaN للتحقق من عدم وجود أقساط صالحة
+        if (count === 0 || isNaN(count)) { 
             const row = tableBody.insertRow();
-            row.insertCell().colSpan = 2;
-            row.insertCell().textContent = "لا توجد أقساط متاحة حاليًا.";
+            const cell = row.insertCell();
+            cell.colSpan = 2;
+            cell.textContent = "لا توجد أقساط متاحة حاليًا.";
+            cell.style.textAlign = 'center';
             return;
         }
 
-        // تاريخ بدء السداد (نهاية الشهر التالي)
         const startDate = new Date();
-        startDate.setMonth(startDate.getMonth() + 1); // الشهر التالي
-        startDate.setDate(28); // افتراض يوم ثابت للسداد (مثلاً نهاية الشهر)
+        startDate.setMonth(startDate.getMonth() + 1); 
+        startDate.setDate(28); 
         
         for (let i = 1; i <= count; i++) {
             const row = tableBody.insertRow();
             
-            // تاريخ القسط الحالي
             const installmentDate = new Date(startDate);
             installmentDate.setMonth(installmentDate.getMonth() + (i - 1));
 
-            // تنسيق التاريخ كـ (يوم / شهر / سنة)
+            // تنسيق التاريخ لضمان النمط العربي/الهندي في كل المتصفحات
             const dateString = installmentDate.toLocaleDateString('ar-EG', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'
             });
 
-            // إضافة البيانات للصف
-            row.insertCell().textContent = i;
+            // تحويل رقم القسط يدوياً إلى النمط الهندي
+            const installmentNumber = convertToEasternArabic(i); 
+
+            row.insertCell().textContent = installmentNumber;
             row.insertCell().textContent = dateString;
         }
     }
 
-    /**
-     * دالة مساعدة لتنسيق العملة.
-     */
-    function formatCurrency(amount) {
-        return amount.toLocaleString('ar-SA', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    }
-
-    // تشغيل الحساب عند تحميل الصفحة بالقيم الافتراضية
     document.addEventListener('DOMContentLoaded', calculateLoan);
 </script>
 
