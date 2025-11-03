@@ -24,7 +24,6 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         .header {
-            
             margin-bottom: 25px;
         }
         .logo {
@@ -36,13 +35,9 @@
         h1 {
             color: #007bff; /* أزرق أساسي */
             text-align: left;
-            
             font-size: 1em; /* حجم خط مناسب ليكون في سطر واحد */
-            
             border-bottom: 2px solid #007bff;
-            
             overflow: hidden; /* يخفي أي نص زائد */
-            
         }
         .input-group {
             margin-bottom: 20px;
@@ -64,9 +59,8 @@
             box-sizing: border-box;
             font-size: 1em;
             transition: border-color 0.3s;
-            /* توحيد الأرقام في حقول الإدخال */
             font-family: 'Tahoma', Arial, sans-serif; 
-            direction: rtl; /* لضمان محاذاة النص لليمين لكن الأرقام تعرض بالنمط الهندي */
+            /* تم حذف direction: rtl; من هنا لتجنب إجبار المتصفح على الأرقام الهندية */
         }
         input[type="number"]:focus {
             border-color: #007bff;
@@ -101,6 +95,8 @@
         .result-item strong {
             color: #007bff;
             font-size: 1.2em;
+            /* لضمان عرض الأرقام بالنمط الغربي في النتائج */
+            font-variant-numeric: tabular-nums; 
         }
         .limitation {
             margin-top: 10px;
@@ -127,7 +123,10 @@
             color: white;
             font-weight: normal;
         }
-        /* تم حذف الـ info-box بناءً على طلب العميل */
+        /* تعديل لعرض الأرقام الغربية في الجدول */
+        .installment-table td, .installment-table th {
+            font-variant-numeric: tabular-nums;
+        }
     </style>
 </head>
 <body>
@@ -213,29 +212,11 @@
     ];
 
     /**
-     * دالة التحويل من الأرقام الغربية (0-9) إلى الأرقام العربية/الهندية (٠-٩).
-     */
-    function convertToEasternArabic(number) {
-        if (typeof number === 'number') {
-            number = String(number);
-        }
-        const western = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-        const eastern = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-        
-        return number.replace(/[0-9]/g, function (digit) {
-            return eastern[western.indexOf(digit)];
-        });
-    }
-
-    /**
-     * دالة مساعدة لتنسيق العملة باستخدام التحويل اليدوي.
+     * دالة مساعدة لتنسيق العملة باستخدام إعدادات لغة تدعم الأرقام الغربية.
      */
     function formatCurrency(amount) {
-        // نستخدم toLocaleString للحصول على الفواصل الألفية بالنمط العربي
-        let formatted = amount.toLocaleString('ar-SA', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-        
-        // ثم نحول الأرقام نفسها إلى النمط الهندي
-        return formatted.replace(/[0-9]/g, convertToEasternArabic);
+        // استخدام 'en-US' لضمان الأرقام الغربية (0-9) والفواصل الألفية.
+        return amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     }
     
     function calculateLoan() {
@@ -292,7 +273,7 @@
         }
         
         document.getElementById('monthly-installment').textContent = formatCurrency(monthlyInstallment);
-        document.getElementById('num-installments').textContent = convertToEasternArabic(numInstallments);
+        document.getElementById('num-installments').textContent = formatCurrency(numInstallments);
 
         displayInstallmentDates(numInstallments);
     }
@@ -323,15 +304,18 @@
             const installmentDate = new Date(startDate);
             installmentDate.setMonth(installmentDate.getMonth() + (i - 1));
 
-            // تنسيق التاريخ لضمان النمط العربي/الهندي في كل المتصفحات
-            const dateString = installmentDate.toLocaleDateString('ar-EG', {
+            // التعديل هنا: نستخدم 'ar' للحصول على أسماء الشهور باللغة العربية.
+            // ثم نستخدم الخيار 'useGrouping: false' لمنع ظهور الفواصل في الأرقام (في التواريخ).
+            // في أغلب المتصفحات الحديثة، سيظهر اليوم والسنة بالنمط الغربي (0-9) بشكل تلقائي.
+            const dateString = installmentDate.toLocaleDateString('ar', {
                 year: 'numeric',
                 month: 'long',
-                day: 'numeric'
+                day: 'numeric',
+                useGrouping: false // إزالة فواصل الأرقام
             });
 
-            // تحويل رقم القسط يدوياً إلى النمط الهندي
-            const installmentNumber = convertToEasternArabic(i); 
+            // تحويل رقم القسط باستخدام formatCurrency لضمان النمط الغربي
+            const installmentNumber = formatCurrency(i); 
 
             row.insertCell().textContent = installmentNumber;
             row.insertCell().textContent = dateString;
